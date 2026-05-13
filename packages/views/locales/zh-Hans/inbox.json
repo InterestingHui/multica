@@ -9,8 +9,16 @@
     "archive_all_read": "归档全部已读",
     "archive_completed": "归档已完成"
   },
+  "filter": {
+    "tooltip": "筛选收件箱",
+    "label": "筛选",
+    "all": "全部",
+    "unread": "未读",
+    "read": "已读"
+  },
   "list": {
     "empty": "暂无通知",
+    "empty_filter": "当前筛选下没有通知",
     "mark_done_tooltip": "标为已完成",
     "archive_tooltip": "归档",
     "time": {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { InboxItem } from "@multica/core/types";
 import {
+  filterInboxItemsByReadState,
   getInboxDisplayTitle,
   getQuickCreateFailureDetail,
   stripQuickCreatePrefix,
@@ -76,5 +77,15 @@ describe("inbox display helpers", () => {
     expect(getQuickCreateFailureDetail(failedItem)).toBe(
       "CLI failed with exit status 1",
     );
+  });
+
+  it("filters inbox items by read state", () => {
+    const unread = item({ id: "unread", read: false });
+    const read = item({ id: "read", read: true });
+    const items = [unread, read];
+
+    expect(filterInboxItemsByReadState(items, "all")).toEqual(items);
+    expect(filterInboxItemsByReadState(items, "unread")).toEqual([unread]);
+    expect(filterInboxItemsByReadState(items, "read")).toEqual([read]);
   });
 });

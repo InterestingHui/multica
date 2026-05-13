@@ -1,5 +1,7 @@
 import type { InboxItem } from "@multica/core/types";
 
+export type InboxReadFilter = "all" | "unread" | "read";
+
 function singleLine(value: string | null | undefined): string {
   return (value ?? "").replace(/\s+/g, " ").trim();
 }
@@ -46,4 +48,13 @@ export function getInboxDisplayTitle(item: InboxItem): string {
 export function getQuickCreateFailureDetail(item: InboxItem): string {
   const details = item.details ?? {};
   return singleLine(details.error) || singleLine(item.body);
+}
+
+export function filterInboxItemsByReadState(
+  items: InboxItem[],
+  filter: InboxReadFilter,
+): InboxItem[] {
+  if (filter === "unread") return items.filter((item) => !item.read);
+  if (filter === "read") return items.filter((item) => item.read);
+  return items;
 }

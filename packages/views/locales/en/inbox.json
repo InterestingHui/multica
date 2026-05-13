@@ -9,8 +9,16 @@
     "archive_all_read": "Archive all read",
     "archive_completed": "Archive completed"
   },
+  "filter": {
+    "tooltip": "Filter inbox",
+    "label": "Filter",
+    "all": "All",
+    "unread": "Unread",
+    "read": "Read"
+  },
   "list": {
     "empty": "No notifications",
+    "empty_filter": "No notifications match this filter",
     "mark_done_tooltip": "Mark as done",
     "archive_tooltip": "Archive",
     "time": {

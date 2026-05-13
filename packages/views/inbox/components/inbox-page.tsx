@@ -33,6 +33,7 @@ import {
   BookCheck,
   ListChecks,
   ArrowLeft,
+  Filter,
 } from "lucide-react";
 import type { InboxItem } from "@multica/core/types";
 import { Button } from "@multica/ui/components/ui/button";
@@ -47,13 +48,20 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
 } from "@multica/ui/components/ui/dropdown-menu";
 import { useIsMobile } from "@multica/ui/hooks/use-mobile";
 import { PageHeader } from "../../layout/page-header";
 import { InboxListItem, useTimeAgo } from "./inbox-list-item";
 import { useTypeLabels } from "./inbox-detail-label";
-import { getInboxDisplayTitle } from "./inbox-display";
+import {
+  filterInboxItemsByReadState,
+  getInboxDisplayTitle,
+  type InboxReadFilter,
+} from "./inbox-display";
 import { useT } from "../../i18n";
 
 export function InboxPage() {
@@ -63,6 +71,7 @@ export function InboxPage() {
   const wsPaths = useWorkspacePaths();
 
   const [selectedKey, setSelectedKeyState] = useState(() => urlIssue);
+  const [readFilter, setReadFilter] = useState<InboxReadFilter>("all");
 
   // Sync from URL when searchParams change (e.g. navigation)
   useEffect(() => {
@@ -72,6 +81,10 @@ export function InboxPage() {
   const wsId = useWorkspaceId();
   const { data: rawItems = [], isLoading: loading } = useQuery(inboxListOptions(wsId));
   const items = useMemo(() => deduplicateInboxItems(rawItems), [rawItems]);
+  const filteredItems = useMemo(
+    () => filterInboxItemsByReadState(items, readFilter),
+    [items, readFilter],
+  );
 
   const selected = items.find((i) => (i.issue_id ?? i.id) === selectedKey) ?? null;
 
@@ -123,6 +136,7 @@ export function InboxPage() {
   const archiveCompletedMutation = useArchiveCompletedInbox();
   const timeAgo = useTimeAgo();
   const typeLabels = useTypeLabels();
+  const hasActiveReadFilter = readFilter !== "all";
 
 
   // Auto-mark-read whenever a selected item is unread — covers both click-
@@ -202,49 +216,89 @@ export function InboxPage() {
           </span>
         )}
       </div>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="text-muted-foreground"
-            />
-          }
-        >
-          <MoreHorizontal className="h-4 w-4" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-auto">
-          <DropdownMenuItem onClick={handleMarkAllRead}>
-            <CheckCheck className="h-4 w-4" />
-            {t(($) => $.menu.mark_all_read)}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleArchiveAll}>
-            <Archive className="h-4 w-4" />
-            {t(($) => $.menu.archive_all)}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleArchiveAllRead}>
-            <BookCheck className="h-4 w-4" />
-            {t(($) => $.menu.archive_all_read)}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleArchiveCompleted}>
-            <ListChecks className="h-4 w-4" />
-            {t(($) => $.menu.archive_completed)}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <div className="flex items-center gap-1">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                title={t(($) => $.filter.tooltip)}
+                className="relative text-muted-foreground"
+              />
+            }
+          >
+            <Filter className="h-4 w-4" />
+            {hasActiveReadFilter && (
+              <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-brand" />
+            )}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-40">
+            <DropdownMenuLabel>{t(($) => $.filter.label)}</DropdownMenuLabel>
+            <DropdownMenuRadioGroup
+              value={readFilter}
+              onValueChange={(value) => setReadFilter(value as InboxReadFilter)}
+            >
+              <DropdownMenuRadioItem value="all">
+                {t(($) => $.filter.all)}
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="unread">
+                {t(($) => $.filter.unread)}
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="read">
+                {t(($) => $.filter.read)}
+              </DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground"
+              />
+            }
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-auto">
+            <DropdownMenuItem onClick={handleMarkAllRead}>
+              <CheckCheck className="h-4 w-4" />
+              {t(($) => $.menu.mark_all_read)}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleArchiveAll}>
+              <Archive className="h-4 w-4" />
+              {t(($) => $.menu.archive_all)}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleArchiveAllRead}>
+              <BookCheck className="h-4 w-4" />
+              {t(($) => $.menu.archive_all_read)}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleArchiveCompleted}>
+              <ListChecks className="h-4 w-4" />
+              {t(($) => $.menu.archive_completed)}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </PageHeader>
   );
 
-  const listBody = items.length === 0 ? (
+  const listBody = filteredItems.length === 0 ? (
     <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
       <Inbox className="mb-3 h-8 w-8 text-muted-foreground/50" />
-      <p className="text-sm">{t(($) => $.list.empty)}</p>
+      <p className="text-sm">
+        {items.length === 0
+          ? t(($) => $.list.empty)
+          : t(($) => $.list.empty_filter)}
+      </p>
     </div>
   ) : (
     <div>
-      {items.map((item) => (
+      {filteredItems.map((item) => (
         <InboxListItem
           key={item.id}
           item={item}
