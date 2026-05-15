@@ -644,6 +644,11 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
   // picked it from "+ Add property" and we want them dropped straight into
   // edit state). Consumed by the row that matches this key, cleared after.
   const [autoOpenProp, setAutoOpenProp] = useState<OptionalPropKey | null>(null);
+  // Controlled state for the "+ Add property" popover. Base UI's Popover
+  // doesn't auto-dismiss on item click (it's not a Menu primitive), so the
+  // popover would stay open behind the newly auto-opened picker — two
+  // popovers stacked. We close it explicitly in `addOptionalProp`.
+  const [addPropPopoverOpen, setAddPropPopoverOpen] = useState(false);
   // Virtuoso's `customScrollParent` wants the HTMLElement, not a ref. A plain
   // `useRef.current` does not trigger a re-render when it populates, so the
   // Virtuoso prop would never receive the element. Callback ref + state fixes
@@ -1098,6 +1103,9 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
         return next;
       });
       setAutoOpenProp(key);
+      // Dismiss the "+ Add property" popover so it doesn't sit stacked
+      // behind the picker we're about to auto-open.
+      setAddPropPopoverOpen(false);
     },
     [],
   );
@@ -1250,7 +1258,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
               own padding so the visual rhythm follows the rows above. */}
           {OPTIONAL_PROP_KEYS.some((k) => !visibleOptionalProps.has(k)) && (
             <div className="col-span-2 mt-1">
-              <Popover>
+              <Popover open={addPropPopoverOpen} onOpenChange={setAddPropPopoverOpen}>
                 <PopoverTrigger
                   className="flex items-center gap-1.5 rounded-md px-2 py-1 -mx-2 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors"
                 >
