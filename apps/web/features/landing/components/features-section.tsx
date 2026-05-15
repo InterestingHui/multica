@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import {
   Bot,
   Brain,
@@ -1085,6 +1086,17 @@ export function FeaturesSection() {
                     </div>
                   ))}
                 </div>
+
+                {feature.label === features[0]!.label ? (
+                  <div className="mt-10">
+                    <Link
+                      href="/usecases/squads"
+                      className="text-sm font-medium text-[#0a0d12] underline-offset-4 hover:underline"
+                    >
+                      See how squads route issues →
+                    </Link>
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>
