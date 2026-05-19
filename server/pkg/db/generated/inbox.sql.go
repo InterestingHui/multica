@@ -13,16 +13,36 @@ import (
 
 const archiveAllInbox = `-- name: ArchiveAllInbox :execrows
 UPDATE inbox_item SET archived = true
-WHERE workspace_id = $1 AND recipient_type = 'member' AND recipient_id = $2 AND archived = false
+WHERE id IN (
+  SELECT i.id FROM inbox_item i
+  LEFT JOIN issue iss ON iss.id = i.issue_id
+  WHERE i.workspace_id = $1 AND i.recipient_type = 'member' AND i.recipient_id = $2::uuid
+    AND i.archived = false
+    AND (
+      $3::text[] IS NULL
+      OR (CASE
+            WHEN iss.id IS NULL OR iss.assignee_id IS NULL THEN 'none'
+            WHEN iss.assignee_type = 'member' AND iss.assignee_id = $2::uuid THEN 'me'
+            WHEN iss.assignee_type = 'agent' AND iss.assignee_id IN (
+                   SELECT a.id FROM agent a
+                    WHERE a.workspace_id = i.workspace_id
+                      AND a.owner_id     = $2::uuid
+                 ) THEN 'my_agent'
+            WHEN iss.assignee_type = 'squad' AND squad_involves_user(iss.assignee_id, i.workspace_id, $2::uuid) THEN 'my_squad'
+            ELSE 'other'
+          END) = ANY($3::text[])
+    )
+)
 `
 
 type ArchiveAllInboxParams struct {
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	RecipientID pgtype.UUID `json:"recipient_id"`
+	UserID      pgtype.UUID `json:"user_id"`
+	Scopes      []string    `json:"scopes"`
 }
 
 func (q *Queries) ArchiveAllInbox(ctx context.Context, arg ArchiveAllInboxParams) (int64, error) {
-	result, err := q.db.Exec(ctx, archiveAllInbox, arg.WorkspaceID, arg.RecipientID)
+	result, err := q.db.Exec(ctx, archiveAllInbox, arg.WorkspaceID, arg.UserID, arg.Scopes)
 	if err != nil {
 		return 0, err
 	}
@@ -31,16 +51,36 @@ func (q *Queries) ArchiveAllInbox(ctx context.Context, arg ArchiveAllInboxParams
 
 const archiveAllReadInbox = `-- name: ArchiveAllReadInbox :execrows
 UPDATE inbox_item SET archived = true
-WHERE workspace_id = $1 AND recipient_type = 'member' AND recipient_id = $2 AND read = true AND archived = false
+WHERE id IN (
+  SELECT i.id FROM inbox_item i
+  LEFT JOIN issue iss ON iss.id = i.issue_id
+  WHERE i.workspace_id = $1 AND i.recipient_type = 'member' AND i.recipient_id = $2::uuid
+    AND i.archived = false AND i.read = true
+    AND (
+      $3::text[] IS NULL
+      OR (CASE
+            WHEN iss.id IS NULL OR iss.assignee_id IS NULL THEN 'none'
+            WHEN iss.assignee_type = 'member' AND iss.assignee_id = $2::uuid THEN 'me'
+            WHEN iss.assignee_type = 'agent' AND iss.assignee_id IN (
+                   SELECT a.id FROM agent a
+                    WHERE a.workspace_id = i.workspace_id
+                      AND a.owner_id     = $2::uuid
+                 ) THEN 'my_agent'
+            WHEN iss.assignee_type = 'squad' AND squad_involves_user(iss.assignee_id, i.workspace_id, $2::uuid) THEN 'my_squad'
+            ELSE 'other'
+          END) = ANY($3::text[])
+    )
+)
 `
 
 type ArchiveAllReadInboxParams struct {
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	RecipientID pgtype.UUID `json:"recipient_id"`
+	UserID      pgtype.UUID `json:"user_id"`
+	Scopes      []string    `json:"scopes"`
 }
 
 func (q *Queries) ArchiveAllReadInbox(ctx context.Context, arg ArchiveAllReadInboxParams) (int64, error) {
-	result, err := q.db.Exec(ctx, archiveAllReadInbox, arg.WorkspaceID, arg.RecipientID)
+	result, err := q.db.Exec(ctx, archiveAllReadInbox, arg.WorkspaceID, arg.UserID, arg.Scopes)
 	if err != nil {
 		return 0, err
 	}
@@ -48,18 +88,38 @@ func (q *Queries) ArchiveAllReadInbox(ctx context.Context, arg ArchiveAllReadInb
 }
 
 const archiveCompletedInbox = `-- name: ArchiveCompletedInbox :execrows
-UPDATE inbox_item i SET archived = true
-WHERE i.workspace_id = $1 AND i.recipient_type = 'member' AND i.recipient_id = $2 AND i.archived = false
-  AND i.issue_id IN (SELECT id FROM issue WHERE status IN ('done', 'cancelled'))
+UPDATE inbox_item SET archived = true
+WHERE id IN (
+  SELECT i.id FROM inbox_item i
+  LEFT JOIN issue iss ON iss.id = i.issue_id
+  WHERE i.workspace_id = $1 AND i.recipient_type = 'member' AND i.recipient_id = $2::uuid
+    AND i.archived = false
+    AND iss.status IN ('done', 'cancelled')
+    AND (
+      $3::text[] IS NULL
+      OR (CASE
+            WHEN iss.id IS NULL OR iss.assignee_id IS NULL THEN 'none'
+            WHEN iss.assignee_type = 'member' AND iss.assignee_id = $2::uuid THEN 'me'
+            WHEN iss.assignee_type = 'agent' AND iss.assignee_id IN (
+                   SELECT a.id FROM agent a
+                    WHERE a.workspace_id = i.workspace_id
+                      AND a.owner_id     = $2::uuid
+                 ) THEN 'my_agent'
+            WHEN iss.assignee_type = 'squad' AND squad_involves_user(iss.assignee_id, i.workspace_id, $2::uuid) THEN 'my_squad'
+            ELSE 'other'
+          END) = ANY($3::text[])
+    )
+)
 `
 
 type ArchiveCompletedInboxParams struct {
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	RecipientID pgtype.UUID `json:"recipient_id"`
+	UserID      pgtype.UUID `json:"user_id"`
+	Scopes      []string    `json:"scopes"`
 }
 
 func (q *Queries) ArchiveCompletedInbox(ctx context.Context, arg ArchiveCompletedInboxParams) (int64, error) {
-	result, err := q.db.Exec(ctx, archiveCompletedInbox, arg.WorkspaceID, arg.RecipientID)
+	result, err := q.db.Exec(ctx, archiveCompletedInbox, arg.WorkspaceID, arg.UserID, arg.Scopes)
 	if err != nil {
 		return 0, err
 	}
@@ -294,12 +354,129 @@ func (q *Queries) GetInboxItemInWorkspace(ctx context.Context, arg GetInboxItemI
 	return i, err
 }
 
+const getInboxResourceAvailability = `-- name: GetInboxResourceAvailability :one
+SELECT
+  EXISTS(
+    SELECT 1 FROM agent a
+     WHERE a.workspace_id = $1 AND a.owner_id = $2::uuid
+  ) AS has_my_agent,
+  EXISTS(
+    SELECT 1 FROM squad s
+     WHERE s.workspace_id = $1
+       AND squad_involves_user(s.id, s.workspace_id, $2::uuid)
+  ) AS has_my_squad
+`
+
+type GetInboxResourceAvailabilityParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	UserID      pgtype.UUID `json:"user_id"`
+}
+
+type GetInboxResourceAvailabilityRow struct {
+	HasMyAgent bool `json:"has_my_agent"`
+	HasMySquad bool `json:"has_my_squad"`
+}
+
+// Drives the chip-disabled state (RFC v3 §B.2.2). Decoupled from inbox content
+// so "I belong to a squad but have 0 squad notifications today" does not place
+// the chip in the disabled state.
+func (q *Queries) GetInboxResourceAvailability(ctx context.Context, arg GetInboxResourceAvailabilityParams) (GetInboxResourceAvailabilityRow, error) {
+	row := q.db.QueryRow(ctx, getInboxResourceAvailability, arg.WorkspaceID, arg.UserID)
+	var i GetInboxResourceAvailabilityRow
+	err := row.Scan(&i.HasMyAgent, &i.HasMySquad)
+	return i, err
+}
+
+const getInboxScopeCounts = `-- name: GetInboxScopeCounts :many
+SELECT scoped.assignee_scope, COUNT(DISTINCT COALESCE(scoped.issue_id::text, scoped.id::text))::bigint AS count
+FROM (
+  SELECT i.id        AS id,
+         i.issue_id  AS issue_id,
+         CASE
+           WHEN iss.id IS NULL OR iss.assignee_id IS NULL THEN 'none'
+           WHEN iss.assignee_type = 'member' AND iss.assignee_id = $2::uuid THEN 'me'
+           WHEN iss.assignee_type = 'agent' AND iss.assignee_id IN (
+                  SELECT a.id FROM agent a
+                   WHERE a.workspace_id = i.workspace_id
+                     AND a.owner_id     = $2::uuid
+                ) THEN 'my_agent'
+           WHEN iss.assignee_type = 'squad' AND squad_involves_user(iss.assignee_id, i.workspace_id, $2::uuid) THEN 'my_squad'
+           ELSE 'other'
+         END AS assignee_scope
+    FROM inbox_item i
+    LEFT JOIN issue iss ON iss.id = i.issue_id
+   WHERE i.workspace_id = $1 AND i.recipient_type = 'member' AND i.recipient_id = $2::uuid AND i.archived = false
+) AS scoped
+GROUP BY scoped.assignee_scope
+`
+
+type GetInboxScopeCountsParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	UserID      pgtype.UUID `json:"user_id"`
+}
+
+type GetInboxScopeCountsRow struct {
+	AssigneeScope string `json:"assignee_scope"`
+	Count         int64  `json:"count"`
+}
+
+// post-dedup count per scope: an issue with three unread notifications counts once.
+// The outer SELECT references `scoped.issue_id` / `scoped.id` explicitly so
+// the alias is unambiguous (RFC v3 §B.3 nit).
+func (q *Queries) GetInboxScopeCounts(ctx context.Context, arg GetInboxScopeCountsParams) ([]GetInboxScopeCountsRow, error) {
+	rows, err := q.db.Query(ctx, getInboxScopeCounts, arg.WorkspaceID, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetInboxScopeCountsRow{}
+	for rows.Next() {
+		var i GetInboxScopeCountsRow
+		if err := rows.Scan(&i.AssigneeScope, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listInboxItems = `-- name: ListInboxItems :many
+
 SELECT i.id, i.workspace_id, i.recipient_type, i.recipient_id, i.type, i.severity, i.issue_id, i.title, i.body, i.read, i.archived, i.created_at, i.actor_type, i.actor_id, i.details,
-       iss.status as issue_status
+       iss.status         AS issue_status,
+       iss.assignee_type  AS issue_assignee_type,
+       iss.assignee_id    AS issue_assignee_id,
+       CASE
+         WHEN iss.id IS NULL OR iss.assignee_id IS NULL THEN 'none'
+         WHEN iss.assignee_type = 'member' AND iss.assignee_id = $4::uuid THEN 'me'
+         WHEN iss.assignee_type = 'agent' AND iss.assignee_id IN (
+                SELECT a.id FROM agent a
+                 WHERE a.workspace_id = i.workspace_id
+                   AND a.owner_id     = $4::uuid
+              ) THEN 'my_agent'
+         WHEN iss.assignee_type = 'squad' AND squad_involves_user(iss.assignee_id, i.workspace_id, $4::uuid) THEN 'my_squad'
+         ELSE 'other'
+       END AS assignee_scope
 FROM inbox_item i
 LEFT JOIN issue iss ON iss.id = i.issue_id
 WHERE i.workspace_id = $1 AND i.recipient_type = $2 AND i.recipient_id = $3 AND i.archived = false
+  AND (
+    $5::text[] IS NULL
+    OR (CASE
+          WHEN iss.id IS NULL OR iss.assignee_id IS NULL THEN 'none'
+          WHEN iss.assignee_type = 'member' AND iss.assignee_id = $4::uuid THEN 'me'
+          WHEN iss.assignee_type = 'agent' AND iss.assignee_id IN (
+                 SELECT a.id FROM agent a
+                  WHERE a.workspace_id = i.workspace_id
+                    AND a.owner_id     = $4::uuid
+               ) THEN 'my_agent'
+          WHEN iss.assignee_type = 'squad' AND squad_involves_user(iss.assignee_id, i.workspace_id, $4::uuid) THEN 'my_squad'
+          ELSE 'other'
+        END) = ANY($5::text[])
+  )
 ORDER BY i.created_at DESC
 `
 
@@ -307,29 +484,47 @@ type ListInboxItemsParams struct {
 	WorkspaceID   pgtype.UUID `json:"workspace_id"`
 	RecipientType string      `json:"recipient_type"`
 	RecipientID   pgtype.UUID `json:"recipient_id"`
+	UserID        pgtype.UUID `json:"user_id"`
+	Scopes        []string    `json:"scopes"`
 }
 
 type ListInboxItemsRow struct {
-	ID            pgtype.UUID        `json:"id"`
-	WorkspaceID   pgtype.UUID        `json:"workspace_id"`
-	RecipientType string             `json:"recipient_type"`
-	RecipientID   pgtype.UUID        `json:"recipient_id"`
-	Type          string             `json:"type"`
-	Severity      string             `json:"severity"`
-	IssueID       pgtype.UUID        `json:"issue_id"`
-	Title         string             `json:"title"`
-	Body          pgtype.Text        `json:"body"`
-	Read          bool               `json:"read"`
-	Archived      bool               `json:"archived"`
-	CreatedAt     pgtype.Timestamptz `json:"created_at"`
-	ActorType     pgtype.Text        `json:"actor_type"`
-	ActorID       pgtype.UUID        `json:"actor_id"`
-	Details       []byte             `json:"details"`
-	IssueStatus   pgtype.Text        `json:"issue_status"`
+	ID                pgtype.UUID        `json:"id"`
+	WorkspaceID       pgtype.UUID        `json:"workspace_id"`
+	RecipientType     string             `json:"recipient_type"`
+	RecipientID       pgtype.UUID        `json:"recipient_id"`
+	Type              string             `json:"type"`
+	Severity          string             `json:"severity"`
+	IssueID           pgtype.UUID        `json:"issue_id"`
+	Title             string             `json:"title"`
+	Body              pgtype.Text        `json:"body"`
+	Read              bool               `json:"read"`
+	Archived          bool               `json:"archived"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	ActorType         pgtype.Text        `json:"actor_type"`
+	ActorID           pgtype.UUID        `json:"actor_id"`
+	Details           []byte             `json:"details"`
+	IssueStatus       pgtype.Text        `json:"issue_status"`
+	IssueAssigneeType pgtype.Text        `json:"issue_assignee_type"`
+	IssueAssigneeID   pgtype.UUID        `json:"issue_assignee_id"`
+	AssigneeScope     string             `json:"assignee_scope"`
 }
 
+// The `assignee_scope` CASE classifies each inbox row into exactly one of
+// five buckets, mirroring the chip semantics in the inbox assignment filter
+// (see RFC v3 §B). The three "my_*" branches reuse the same squad/agent
+// predicates as ListIssues (server/pkg/db/queries/issue.sql:22-56), so the
+// two callers can never drift. `none` covers inbox items without an issue
+// or with an unassigned issue; `other` covers issues assigned to someone
+// else.
 func (q *Queries) ListInboxItems(ctx context.Context, arg ListInboxItemsParams) ([]ListInboxItemsRow, error) {
-	rows, err := q.db.Query(ctx, listInboxItems, arg.WorkspaceID, arg.RecipientType, arg.RecipientID)
+	rows, err := q.db.Query(ctx, listInboxItems,
+		arg.WorkspaceID,
+		arg.RecipientType,
+		arg.RecipientID,
+		arg.UserID,
+		arg.Scopes,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -354,6 +549,9 @@ func (q *Queries) ListInboxItems(ctx context.Context, arg ListInboxItemsParams) 
 			&i.ActorID,
 			&i.Details,
 			&i.IssueStatus,
+			&i.IssueAssigneeType,
+			&i.IssueAssigneeID,
+			&i.AssigneeScope,
 		); err != nil {
 			return nil, err
 		}
@@ -367,16 +565,36 @@ func (q *Queries) ListInboxItems(ctx context.Context, arg ListInboxItemsParams) 
 
 const markAllInboxRead = `-- name: MarkAllInboxRead :execrows
 UPDATE inbox_item SET read = true
-WHERE workspace_id = $1 AND recipient_type = 'member' AND recipient_id = $2 AND archived = false AND read = false
+WHERE id IN (
+  SELECT i.id FROM inbox_item i
+  LEFT JOIN issue iss ON iss.id = i.issue_id
+  WHERE i.workspace_id = $1 AND i.recipient_type = 'member' AND i.recipient_id = $2::uuid
+    AND i.archived = false AND i.read = false
+    AND (
+      $3::text[] IS NULL
+      OR (CASE
+            WHEN iss.id IS NULL OR iss.assignee_id IS NULL THEN 'none'
+            WHEN iss.assignee_type = 'member' AND iss.assignee_id = $2::uuid THEN 'me'
+            WHEN iss.assignee_type = 'agent' AND iss.assignee_id IN (
+                   SELECT a.id FROM agent a
+                    WHERE a.workspace_id = i.workspace_id
+                      AND a.owner_id     = $2::uuid
+                 ) THEN 'my_agent'
+            WHEN iss.assignee_type = 'squad' AND squad_involves_user(iss.assignee_id, i.workspace_id, $2::uuid) THEN 'my_squad'
+            ELSE 'other'
+          END) = ANY($3::text[])
+    )
+)
 `
 
 type MarkAllInboxReadParams struct {
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	RecipientID pgtype.UUID `json:"recipient_id"`
+	UserID      pgtype.UUID `json:"user_id"`
+	Scopes      []string    `json:"scopes"`
 }
 
 func (q *Queries) MarkAllInboxRead(ctx context.Context, arg MarkAllInboxReadParams) (int64, error) {
-	result, err := q.db.Exec(ctx, markAllInboxRead, arg.WorkspaceID, arg.RecipientID)
+	result, err := q.db.Exec(ctx, markAllInboxRead, arg.WorkspaceID, arg.UserID, arg.Scopes)
 	if err != nil {
 		return 0, err
 	}

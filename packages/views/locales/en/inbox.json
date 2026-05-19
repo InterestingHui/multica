@@ -5,12 +5,33 @@
   },
   "menu": {
     "mark_all_read": "Mark all as read",
+    "mark_all_read_scoped": "Mark filtered as read",
     "archive_all": "Archive all",
+    "archive_all_scoped": "Archive filtered",
     "archive_all_read": "Archive all read",
-    "archive_completed": "Archive completed"
+    "archive_all_read_scoped": "Archive filtered read",
+    "archive_completed": "Archive completed",
+    "archive_completed_scoped": "Archive filtered completed"
+  },
+  "filter": {
+    "aria_label": "Filter inbox by assignment",
+    "scopes": {
+      "me": "Assigned to me",
+      "my_agent": "My agent",
+      "my_squad": "My squad"
+    },
+    "tooltip": {
+      "no_agent": "You don't own any agent yet.",
+      "no_squad": "You're not part of any squad yet.",
+      "no_agent_selected": "You don't own any agent right now, but your filter is saved.",
+      "no_squad_selected": "You're not part of any squad right now, but your filter is saved."
+    }
   },
   "list": {
     "empty": "No notifications",
+    "empty_filtered": "No notifications match the current filter",
+    "empty_no_filter": "No filter selected",
+    "show_all": "Show all",
     "mark_done_tooltip": "Mark as done",
     "archive_tooltip": "Archive",
     "time": {

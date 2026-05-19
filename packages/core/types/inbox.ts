@@ -21,6 +21,22 @@ export type InboxItemType =
   | "quick_create_done"
   | "quick_create_failed";
 
+/**
+ * Inbox assignment scope buckets (RFC v3 §B). The three "my_*" values map to
+ * the user-selectable chips; "other" and "none" are server-internal fallback
+ * buckets that fill the default-no-filter view but cannot be explicitly
+ * filtered to.
+ */
+export type InboxAssigneeScope =
+  | "me"
+  | "my_agent"
+  | "my_squad"
+  | "other"
+  | "none";
+
+/** User-selectable subset of InboxAssigneeScope (chips). */
+export type InboxFilterScope = "me" | "my_agent" | "my_squad";
+
 export interface InboxItem {
   id: string;
   workspace_id: string;
@@ -38,4 +54,26 @@ export interface InboxItem {
   archived: boolean;
   created_at: string;
   details: Record<string, string> | null;
+  // Server-tagged scope of the issue this inbox item references (RFC v3 §A).
+  // Optional because older servers may not emit it.
+  issue_assignee_type?: "member" | "agent" | "squad" | null;
+  issue_assignee_id?: string | null;
+  assignee_scope?: InboxAssigneeScope | null;
 }
+
+export type InboxScopeCounts = Record<InboxAssigneeScope, number>;
+
+export interface InboxResourceAvailability {
+  has_my_agent: boolean;
+  has_my_squad: boolean;
+}
+
+/**
+ * Identifies which bulk-archive endpoint produced an `inbox:batch-archived`
+ * WS event. Frontends use this to choose the right predicate when applying a
+ * precise cache update (RFC v4 §1).
+ */
+export type InboxBatchArchiveOperation =
+  | "archive_all"
+  | "archive_all_read"
+  | "archive_completed";

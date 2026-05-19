@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { inboxKeys } from "./queries";
 import { useWorkspaceId } from "../hooks";
-import type { InboxItem } from "../types";
+import type { InboxItem, InboxFilterScope } from "../types";
 
 export function useMarkInboxRead() {
   const qc = useQueryClient();
@@ -22,6 +22,7 @@ export function useMarkInboxRead() {
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: inboxKeys.list(wsId) });
+      qc.invalidateQueries({ queryKey: inboxKeys.scopeCounts(wsId) });
     },
   });
 }
@@ -51,21 +52,27 @@ export function useArchiveInbox() {
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: inboxKeys.list(wsId) });
+      qc.invalidateQueries({ queryKey: inboxKeys.scopeCounts(wsId) });
     },
   });
 }
 
+// All bulk mutations accept an optional `scope` parameter. When the caller
+// is in mode=all (RFC v3 §E.1) it should pass undefined; when in mode=subset
+// it should pass the resolved chip subset; in mode=empty the button is
+// disabled and these mutations should not fire.
 export function useMarkAllInboxRead() {
   const qc = useQueryClient();
   const wsId = useWorkspaceId();
   return useMutation({
-    mutationFn: () => api.markAllInboxRead(),
-    onMutate: async () => {
+    mutationFn: (scope?: InboxFilterScope[]) => api.markAllInboxRead(scope),
+    onMutate: async (scope) => {
       await qc.cancelQueries({ queryKey: inboxKeys.list(wsId) });
       const prev = qc.getQueryData<InboxItem[]>(inboxKeys.list(wsId));
+      const inScope = scopeMatcher(scope);
       qc.setQueryData<InboxItem[]>(inboxKeys.list(wsId), (old) =>
         old?.map((item) =>
-          !item.archived ? { ...item, read: true } : item,
+          !item.archived && inScope(item) ? { ...item, read: true } : item,
         ),
       );
       return { prev };
@@ -75,6 +82,7 @@ export function useMarkAllInboxRead() {
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: inboxKeys.list(wsId) });
+      qc.invalidateQueries({ queryKey: inboxKeys.scopeCounts(wsId) });
     },
   });
 }
@@ -83,9 +91,10 @@ export function useArchiveAllInbox() {
   const qc = useQueryClient();
   const wsId = useWorkspaceId();
   return useMutation({
-    mutationFn: () => api.archiveAllInbox(),
+    mutationFn: (scope?: InboxFilterScope[]) => api.archiveAllInbox(scope),
     onSettled: () => {
       qc.invalidateQueries({ queryKey: inboxKeys.list(wsId) });
+      qc.invalidateQueries({ queryKey: inboxKeys.scopeCounts(wsId) });
     },
   });
 }
@@ -94,9 +103,10 @@ export function useArchiveAllReadInbox() {
   const qc = useQueryClient();
   const wsId = useWorkspaceId();
   return useMutation({
-    mutationFn: () => api.archiveAllReadInbox(),
+    mutationFn: (scope?: InboxFilterScope[]) => api.archiveAllReadInbox(scope),
     onSettled: () => {
       qc.invalidateQueries({ queryKey: inboxKeys.list(wsId) });
+      qc.invalidateQueries({ queryKey: inboxKeys.scopeCounts(wsId) });
     },
   });
 }
@@ -105,9 +115,21 @@ export function useArchiveCompletedInbox() {
   const qc = useQueryClient();
   const wsId = useWorkspaceId();
   return useMutation({
-    mutationFn: () => api.archiveCompletedInbox(),
+    mutationFn: (scope?: InboxFilterScope[]) => api.archiveCompletedInbox(scope),
     onSettled: () => {
       qc.invalidateQueries({ queryKey: inboxKeys.list(wsId) });
+      qc.invalidateQueries({ queryKey: inboxKeys.scopeCounts(wsId) });
     },
   });
+}
+
+// True when the inbox item belongs to the user-selected scope subset, or
+// when no scope was passed (= mark/archive everything).
+function scopeMatcher(scope?: InboxFilterScope[]) {
+  if (!scope || scope.length === 0) return (_item: InboxItem) => true;
+  const set = new Set(scope);
+  return (item: InboxItem) => {
+    const s = item.assignee_scope;
+    return s != null && (set as Set<string>).has(s);
+  };
 }

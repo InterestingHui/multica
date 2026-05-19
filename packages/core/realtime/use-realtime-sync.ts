@@ -27,7 +27,7 @@ import {
   onIssueDeleted,
   onIssueLabelsChanged,
 } from "../issues/ws-updaters";
-import { onInboxNew, onInboxInvalidate, onInboxIssueStatusChanged, onInboxIssueDeleted } from "../inbox/ws-updaters";
+import { onInboxNew, onInboxInvalidate, onInboxIssueStatusChanged, onInboxIssueDeleted, onInboxBatch } from "../inbox/ws-updaters";
 import { inboxKeys } from "../inbox/queries";
 import { notificationPreferenceOptions } from "../notification-preferences/queries";
 import { workspaceKeys, workspaceListOptions } from "../workspace/queries";
@@ -342,6 +342,7 @@ export function useRealtimeSync(
     const specificEvents = new Set([
       "workspace:updated",
       "issue:updated", "issue:created", "issue:deleted", "issue_labels:changed", "inbox:new",
+      "inbox:batch-read", "inbox:batch-archived",
       "comment:created", "comment:updated", "comment:deleted",
       "comment:resolved", "comment:unresolved",
       "activity:created",
@@ -468,6 +469,21 @@ export function useRealtimeSync(
         title: item.title,
         body: item.body ?? "",
       });
+    });
+
+    // Bulk mark-all-read / archive-* on another device — refresh this device's
+    // inbox so the change appears. The payload carries `scope` (and for
+    // archived, `operation`) per RFC v3 §C.5 / v4 §1; precise cache updates
+    // off those fields are a documented follow-up — invalidate is the safe
+    // baseline today.
+    const unsubInboxBatchRead = ws.on("inbox:batch-read", () => {
+      const wsId = getCurrentWsId();
+      if (wsId) onInboxBatch(qc, wsId);
+    });
+
+    const unsubInboxBatchArchived = ws.on("inbox:batch-archived", () => {
+      const wsId = getCurrentWsId();
+      if (wsId) onInboxBatch(qc, wsId);
     });
 
     // --- Timeline event handlers (global fallback) ---
@@ -879,6 +895,8 @@ export function useRealtimeSync(
       unsubIssueDeleted();
       unsubIssueLabelsChanged();
       unsubInboxNew();
+      unsubInboxBatchRead();
+      unsubInboxBatchArchived();
       unsubCommentCreated();
       unsubCommentUpdated();
       unsubCommentDeleted();

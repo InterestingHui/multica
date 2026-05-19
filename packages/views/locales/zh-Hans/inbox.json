@@ -5,12 +5,33 @@
   },
   "menu": {
     "mark_all_read": "全部标为已读",
+    "mark_all_read_scoped": "当前筛选标为已读",
     "archive_all": "归档全部",
+    "archive_all_scoped": "归档当前筛选",
     "archive_all_read": "归档全部已读",
-    "archive_completed": "归档已完成"
+    "archive_all_read_scoped": "归档当前筛选已读",
+    "archive_completed": "归档已完成",
+    "archive_completed_scoped": "归档当前筛选已完成"
+  },
+  "filter": {
+    "aria_label": "按分配筛选收件箱",
+    "scopes": {
+      "me": "分给我",
+      "my_agent": "我的智能体",
+      "my_squad": "我的小组"
+    },
+    "tooltip": {
+      "no_agent": "你还没有任何智能体。",
+      "no_squad": "你还没有加入任何小组。",
+      "no_agent_selected": "你目前没有相关智能体，但筛选偏好已保留。",
+      "no_squad_selected": "你目前没有相关小组，但筛选偏好已保留。"
+    }
   },
   "list": {
     "empty": "暂无通知",
+    "empty_filtered": "当前筛选下暂无通知",
+    "empty_no_filter": "未选择任何筛选项",
+    "show_all": "查看全部",
     "mark_done_tooltip": "标为已完成",
     "archive_tooltip": "归档",
     "time": {

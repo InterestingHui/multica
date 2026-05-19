@@ -135,11 +135,20 @@ export interface InboxArchivedPayload {
 export interface InboxBatchReadPayload {
   recipient_id: string;
   count: number;
+  // Optional assignment-scope filter the originating mark-all-read was
+  // narrowed to (RFC v3 §C.5). When present, listeners may apply a precise
+  // cache update; when absent, the safe default is a full inbox invalidate.
+  scope?: import("./inbox").InboxFilterScope[] | null;
 }
 
 export interface InboxBatchArchivedPayload {
   recipient_id: string;
   count: number;
+  // Identifies the bulk archive variant so listeners can pick the right
+  // predicate for a precise cache update (RFC v4 §1). Optional for backward
+  // compatibility with older servers.
+  operation?: import("./inbox").InboxBatchArchiveOperation | null;
+  scope?: import("./inbox").InboxFilterScope[] | null;
 }
 
 export interface CommentCreatedPayload {

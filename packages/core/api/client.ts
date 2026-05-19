@@ -23,6 +23,9 @@ import type {
   AgentRunCount,
   AgentRuntime,
   InboxItem,
+  InboxFilterScope,
+  InboxScopeCounts,
+  InboxResourceAvailability,
   IssueSubscriber,
   Comment,
   Reaction,
@@ -185,6 +188,14 @@ const EMPTY_ONBOARDING_NO_RUNTIME_BOOTSTRAP_RESPONSE:
   workspace_id: "",
   issue_id: "",
 };
+
+// Serialize the inbox `scope` filter into a `?scope=me,my_agent` query
+// fragment. The server rejects empty arrays, so callers must skip the bulk
+// request entirely when no chip is selected (RFC v3 §E.1, mode=empty).
+function inboxScopeQuery(scope?: InboxFilterScope[] | null): string {
+  if (!scope || scope.length === 0) return "";
+  return `?scope=${encodeURIComponent(scope.join(","))}`;
+}
 
 // --- Starter content (post-onboarding import) -----------------------------
 // Shape mirrors the Go request/response in handler/onboarding.go.
@@ -1095,8 +1106,8 @@ export class ApiClient {
   }
 
   // Inbox
-  async listInbox(): Promise<InboxItem[]> {
-    return this.fetch("/api/inbox");
+  async listInbox(scope?: InboxFilterScope[]): Promise<InboxItem[]> {
+    return this.fetch(`/api/inbox${inboxScopeQuery(scope)}`);
   }
 
   async markInboxRead(id: string): Promise<InboxItem> {
@@ -1111,20 +1122,28 @@ export class ApiClient {
     return this.fetch("/api/inbox/unread-count");
   }
 
-  async markAllInboxRead(): Promise<{ count: number }> {
-    return this.fetch("/api/inbox/mark-all-read", { method: "POST" });
+  async getInboxScopeCounts(): Promise<InboxScopeCounts> {
+    return this.fetch("/api/inbox/scope-counts");
   }
 
-  async archiveAllInbox(): Promise<{ count: number }> {
-    return this.fetch("/api/inbox/archive-all", { method: "POST" });
+  async getInboxResourceAvailability(): Promise<InboxResourceAvailability> {
+    return this.fetch("/api/inbox/resource-availability");
   }
 
-  async archiveAllReadInbox(): Promise<{ count: number }> {
-    return this.fetch("/api/inbox/archive-all-read", { method: "POST" });
+  async markAllInboxRead(scope?: InboxFilterScope[]): Promise<{ count: number }> {
+    return this.fetch(`/api/inbox/mark-all-read${inboxScopeQuery(scope)}`, { method: "POST" });
   }
 
-  async archiveCompletedInbox(): Promise<{ count: number }> {
-    return this.fetch("/api/inbox/archive-completed", { method: "POST" });
+  async archiveAllInbox(scope?: InboxFilterScope[]): Promise<{ count: number }> {
+    return this.fetch(`/api/inbox/archive-all${inboxScopeQuery(scope)}`, { method: "POST" });
+  }
+
+  async archiveAllReadInbox(scope?: InboxFilterScope[]): Promise<{ count: number }> {
+    return this.fetch(`/api/inbox/archive-all-read${inboxScopeQuery(scope)}`, { method: "POST" });
+  }
+
+  async archiveCompletedInbox(scope?: InboxFilterScope[]): Promise<{ count: number }> {
+    return this.fetch(`/api/inbox/archive-completed${inboxScopeQuery(scope)}`, { method: "POST" });
   }
 
   // Notification preferences

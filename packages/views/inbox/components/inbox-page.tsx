@@ -11,6 +11,7 @@ import {
   inboxListOptions,
   deduplicateInboxItems,
   useInboxUnreadCount,
+  filterInboxByScope,
 } from "@multica/core/inbox/queries";
 import {
   useMarkInboxRead,
@@ -20,6 +21,10 @@ import {
   useArchiveAllReadInbox,
   useArchiveCompletedInbox,
 } from "@multica/core/inbox/mutations";
+import {
+  useInboxScopeStore,
+  resolveInboxFilter,
+} from "@multica/core/inbox/stores";
 
 import { IssueDetail } from "../../issues/components";
 import { ErrorBoundary } from "@multica/ui/components/common/error-boundary";
@@ -54,6 +59,7 @@ import { PageHeader } from "../../layout/page-header";
 import { InboxListItem, useTimeAgo } from "./inbox-list-item";
 import { useTypeLabels } from "./inbox-detail-label";
 import { getInboxDisplayTitle } from "./inbox-display";
+import { InboxFilterChips } from "./inbox-filter-chips";
 import { useT } from "../../i18n";
 
 export function InboxPage() {
@@ -71,7 +77,16 @@ export function InboxPage() {
 
   const wsId = useWorkspaceId();
   const { data: rawItems = [], isLoading: loading } = useQuery(inboxListOptions(wsId));
-  const items = useMemo(() => deduplicateInboxItems(rawItems), [rawItems]);
+  const selectedScopes = useInboxScopeStore((s) => s.selected);
+  const selectAllScopes = useInboxScopeStore((s) => s.selectAll);
+  // RFC v3 §E.1: filter mode resolves to one of all/subset/empty. Bulk
+  // actions, the list selector, and the empty-state UI are all driven from
+  // this single derived value.
+  const filter = useMemo(() => resolveInboxFilter(selectedScopes), [selectedScopes]);
+  const items = useMemo(
+    () => filterInboxByScope(deduplicateInboxItems(rawItems), filter.scopes),
+    [rawItems, filter.scopes],
+  );
 
   const selected = items.find((i) => (i.issue_id ?? i.id) === selectedKey) ?? null;
 
@@ -171,9 +186,16 @@ export function InboxPage() {
     });
   };
 
-  // Batch operations
+  // Batch operations. Each routes the resolved scope through to the mutation
+  // so the server narrows the bulk query (RFC v3 §C). mode=empty short-circuits
+  // before sending — the user is meant to see the empty state, not silently
+  // get a 400 from the backend.
+  const bulkScope = filter.mode === "subset" ? filter.scopes ?? undefined : undefined;
+  const bulkDisabled = filter.mode === "empty";
+
   const handleMarkAllRead = () => {
-    markAllReadMutation.mutate(undefined, {
+    if (bulkDisabled) return;
+    markAllReadMutation.mutate(bulkScope, {
       onError: (err) =>
         toast.error(
           err instanceof Error && err.message
@@ -184,8 +206,9 @@ export function InboxPage() {
   };
 
   const handleArchiveAll = () => {
+    if (bulkDisabled) return;
     setSelectedKey("");
-    archiveAllMutation.mutate(undefined, {
+    archiveAllMutation.mutate(bulkScope, {
       onError: (err) =>
         toast.error(
           err instanceof Error && err.message
@@ -196,9 +219,10 @@ export function InboxPage() {
   };
 
   const handleArchiveAllRead = () => {
+    if (bulkDisabled) return;
     const readKeys = items.filter((i) => i.read).map((i) => i.issue_id ?? i.id);
     if (readKeys.includes(selectedKey)) setSelectedKey("");
-    archiveAllReadMutation.mutate(undefined, {
+    archiveAllReadMutation.mutate(bulkScope, {
       onError: (err) =>
         toast.error(
           err instanceof Error && err.message
@@ -209,8 +233,9 @@ export function InboxPage() {
   };
 
   const handleArchiveCompleted = () => {
+    if (bulkDisabled) return;
     setSelectedKey("");
-    archiveCompletedMutation.mutate(undefined, {
+    archiveCompletedMutation.mutate(bulkScope, {
       onError: (err) =>
         toast.error(
           err instanceof Error && err.message
@@ -222,55 +247,93 @@ export function InboxPage() {
 
   // -- Shared sub-components --------------------------------------------------
 
+  // Bulk-action labels swap to a "current filter" variant when the user has
+  // narrowed the inbox to a subset. The dropdown is disabled entirely in
+  // mode=empty (RFC v3 §C / §E.1) so users don't fire a bulk action against
+  // an empty visible list.
+  const isSubset = filter.mode === "subset";
+  const markAllReadLabel = isSubset
+    ? t(($) => $.menu.mark_all_read_scoped)
+    : t(($) => $.menu.mark_all_read);
+  const archiveAllLabel = isSubset
+    ? t(($) => $.menu.archive_all_scoped)
+    : t(($) => $.menu.archive_all);
+  const archiveAllReadLabel = isSubset
+    ? t(($) => $.menu.archive_all_read_scoped)
+    : t(($) => $.menu.archive_all_read);
+  const archiveCompletedLabel = isSubset
+    ? t(($) => $.menu.archive_completed_scoped)
+    : t(($) => $.menu.archive_completed);
+
   const listHeader = (
-    <PageHeader className="justify-between">
-      <div className="flex items-center gap-2">
-        <h1 className="text-sm font-semibold">{t(($) => $.page.title)}</h1>
-        {unreadCount > 0 && (
-          <span className="text-xs text-muted-foreground">
-            {unreadCount}
-          </span>
-        )}
-      </div>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="text-muted-foreground"
-            />
-          }
-        >
-          <MoreHorizontal className="h-4 w-4" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-auto">
-          <DropdownMenuItem onClick={handleMarkAllRead}>
-            <CheckCheck className="h-4 w-4" />
-            {t(($) => $.menu.mark_all_read)}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleArchiveAll}>
-            <Archive className="h-4 w-4" />
-            {t(($) => $.menu.archive_all)}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleArchiveAllRead}>
-            <BookCheck className="h-4 w-4" />
-            {t(($) => $.menu.archive_all_read)}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={handleArchiveCompleted}>
-            <ListChecks className="h-4 w-4" />
-            {t(($) => $.menu.archive_completed)}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </PageHeader>
+    <>
+      <PageHeader className="justify-between">
+        <div className="flex items-center gap-2">
+          <h1 className="text-sm font-semibold">{t(($) => $.page.title)}</h1>
+          {unreadCount > 0 && (
+            <span className="text-xs text-muted-foreground">
+              {unreadCount}
+            </span>
+          )}
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground"
+                disabled={bulkDisabled}
+              />
+            }
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-auto">
+            <DropdownMenuItem onClick={handleMarkAllRead}>
+              <CheckCheck className="h-4 w-4" />
+              {markAllReadLabel}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleArchiveAll}>
+              <Archive className="h-4 w-4" />
+              {archiveAllLabel}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleArchiveAllRead}>
+              <BookCheck className="h-4 w-4" />
+              {archiveAllReadLabel}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleArchiveCompleted}>
+              <ListChecks className="h-4 w-4" />
+              {archiveCompletedLabel}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </PageHeader>
+      <InboxFilterChips />
+    </>
   );
 
   const listBody = items.length === 0 ? (
     <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
       <Inbox className="mb-3 h-8 w-8 text-muted-foreground/50" />
-      <p className="text-sm">{t(($) => $.list.empty)}</p>
+      <p className="text-sm">
+        {filter.mode === "empty"
+          ? t(($) => $.list.empty_no_filter)
+          : filter.mode === "subset"
+            ? t(($) => $.list.empty_filtered)
+            : t(($) => $.list.empty)}
+      </p>
+      {filter.mode !== "all" && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="mt-2 text-xs"
+          onClick={() => selectAllScopes()}
+        >
+          {t(($) => $.list.show_all)}
+        </Button>
+      )}
     </div>
   ) : (
     <div>

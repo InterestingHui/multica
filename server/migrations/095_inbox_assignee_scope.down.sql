@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS squad_involves_user(UUID, UUID, UUID);
