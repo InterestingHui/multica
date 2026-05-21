@@ -241,14 +241,14 @@ describe("ApiClient", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const client = new ApiClient("https://api.example.test");
-    await client.deleteCloudRuntimeNode("node-abc-123");
+    await client.deleteCloudRuntimeNode("i-0123456789abcdef0");
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, opts] = fetchMock.mock.calls[0]!;
     expect(url).toBe("https://api.example.test/api/cloud-runtime/nodes");
     expect(opts).toMatchObject({
       method: "DELETE",
-      body: JSON.stringify({ instance_id: "node-abc-123" }),
+      body: JSON.stringify({ instance_id: "i-0123456789abcdef0" }),
     });
     expect((opts.headers as Record<string, string>)["Content-Type"]).toBe(
       "application/json",
