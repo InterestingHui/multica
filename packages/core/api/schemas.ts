@@ -606,6 +606,8 @@ export const EMPTY_USER: User = {
   language: null,
   profile_description: "",
   timezone: null,
+  provider_profiles: [],
+  active_provider_profile_id: null,
   created_at: "",
   updated_at: "",
 };
