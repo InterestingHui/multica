@@ -11,6 +11,7 @@ import { useNavigation } from "../navigation";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -57,34 +58,36 @@ export function ProviderProfilePicker() {
             }
           />
           <DropdownMenuContent align="start" className="w-56">
-            <DropdownMenuLabel>Provider Profiles</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => setActiveMutation.mutate(null)}
-              className={!activeProfile ? "font-medium" : ""}
-            >
-              <Cpu className="h-4 w-4" />
-              <span>Default</span>
-              {!activeProfile && <span className="ml-auto text-xs text-muted-foreground">Active</span>}
-            </DropdownMenuItem>
-            {profiles?.map((profile) => (
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Provider Profiles</DropdownMenuLabel>
+              <DropdownMenuSeparator />
               <DropdownMenuItem
-                key={profile.id}
-                onClick={() => setActiveMutation.mutate(profile.id)}
-                className={activeProfile?.id === profile.id ? "font-medium" : ""}
+                onClick={() => setActiveMutation.mutate(null)}
+                className={!activeProfile ? "font-medium" : ""}
               >
                 <Cpu className="h-4 w-4" />
-                <div className="flex flex-col">
-                  <span>{profile.name}</span>
-                  {profile.default_model && (
-                    <span className="text-xs text-muted-foreground">{profile.default_model}</span>
-                  )}
-                </div>
-                {activeProfile?.id === profile.id && (
-                  <span className="ml-auto text-xs text-muted-foreground">Active</span>
-                )}
+                <span>Default</span>
+                {!activeProfile && <span className="ml-auto text-xs text-muted-foreground">Active</span>}
               </DropdownMenuItem>
-            ))}
+              {profiles?.map((profile) => (
+                <DropdownMenuItem
+                  key={profile.id}
+                  onClick={() => setActiveMutation.mutate(profile.id)}
+                  className={activeProfile?.id === profile.id ? "font-medium" : ""}
+                >
+                  <Cpu className="h-4 w-4" />
+                  <div className="flex flex-col">
+                    <span>{profile.name}</span>
+                    {profile.default_model && (
+                      <span className="text-xs text-muted-foreground">{profile.default_model}</span>
+                    )}
+                  </div>
+                  {activeProfile?.id === profile.id && (
+                    <span className="ml-auto text-xs text-muted-foreground">Active</span>
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={handleManageProfiles}
