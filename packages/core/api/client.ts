@@ -31,6 +31,7 @@ import type {
   WorkspaceRepo,
   MemberWithUser,
   User,
+  ProviderProfile,
   Skill,
   SkillSummary,
   CreateSkillRequest,
@@ -421,6 +422,17 @@ export class ApiClient {
     });
     return parseWithFallback(raw, UserSchema, EMPTY_USER, {
       endpoint: "PATCH /api/me",
+    });
+  }
+
+  async getProviderProfiles(): Promise<ProviderProfile[]> {
+    return this.fetch("/api/me/provider-profiles");
+  }
+
+  async updateProviderProfiles(profiles: ProviderProfile[]): Promise<ProviderProfile[]> {
+    return this.fetch("/api/me/provider-profiles", {
+      method: "PUT",
+      body: JSON.stringify({ profiles }),
     });
   }
 

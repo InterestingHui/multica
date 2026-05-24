@@ -1103,6 +1103,18 @@ func (h *Handler) ClaimTaskByRuntime(w http.ResponseWriter, r *http.Request) {
 				slog.Warn("failed to unmarshal agent custom_env", "agent_id", uuidToString(agent.ID), "error", err)
 			}
 		}
+
+			// Merge active provider profile env vars — agent-level keys win.
+			if profileEnv := h.getActiveProviderEnv(r.Context(), agent.OwnerID); len(profileEnv) > 0 {
+				if customEnv == nil {
+					customEnv = make(map[string]string)
+				}
+				for k, v := range profileEnv {
+					if _, exists := customEnv[k]; !exists {
+						customEnv[k] = v
+					}
+				}
+			}
 		var customArgs []string
 		if agent.CustomArgs != nil {
 			if err := json.Unmarshal(agent.CustomArgs, &customArgs); err != nil {
@@ -2165,4 +2177,42 @@ func (h *Handler) GetTaskGCCheck(w http.ResponseWriter, r *http.Request) {
 		"status":       task.Status,
 		"completed_at": task.CompletedAt.Time,
 	})
+}
+
+// getActiveProviderEnv reads the agent owner's active provider profile and
+// returns the env vars it should inject. Returns nil when there is no active
+// profile or the owner cannot be resolved. Agent-level custom_env keys take
+// precedence — callers must merge these under existing keys.
+func (h *Handler) getActiveProviderEnv(ctx context.Context, ownerID pgtype.UUID) map[string]string {
+	if !ownerID.Valid {
+		return nil
+	}
+	user, err := h.Queries.GetUser(ctx, ownerID)
+	if err != nil {
+		return nil
+	}
+	if !user.ActiveProviderProfileID.Valid || user.ActiveProviderProfileID.String == "" {
+		return nil
+	}
+	var profiles []ProviderProfile
+	if len(user.ProviderProfiles) == 0 {
+		return nil
+	}
+	if err := json.Unmarshal(user.ProviderProfiles, &profiles); err != nil {
+		return nil
+	}
+	activeID := user.ActiveProviderProfileID.String
+	for _, p := range profiles {
+		if p.ID == activeID && p.ApiKey != "" {
+			env := make(map[string]string)
+			if p.ApiKey != "" {
+				env["ANTHROPIC_API_KEY"] = p.ApiKey
+			}
+			if p.BaseURL != "" {
+				env["ANTHROPIC_BASE_URL"] = p.BaseURL
+			}
+			return env
+		}
+	}
+	return nil
 }

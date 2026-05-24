@@ -17,6 +17,8 @@ export const mockUser: User = {
   language: null,
   timezone: null,
   profile_description: "",
+  provider_profiles: [],
+  active_provider_profile_id: null,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
 };

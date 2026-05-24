@@ -161,6 +161,8 @@ export interface UpdateMeRequest {
   profile_description?: string;
   /** IANA tz to pin; "" clears back to browser-tz; undefined leaves untouched. */
   timezone?: string;
+  active_provider_profile_id?: string | null;
+>>>>>>> 2b47d6a5 (feat(provider-profiles): add provider profile selection to sidebar and settings)
 }
 
 export interface CreateMemberRequest {

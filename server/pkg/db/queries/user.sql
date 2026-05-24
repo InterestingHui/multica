@@ -34,6 +34,19 @@ UPDATE "user" SET
         WHEN sqlc.narg('timezone')::text = ''    THEN NULL
         ELSE sqlc.narg('timezone')::text
     END,
+    active_provider_profile_id = COALESCE(sqlc.narg('active_provider_profile_id'), active_provider_profile_id),
+
+-- name: UpdateProviderProfiles :one
+UPDATE "user" SET
+    provider_profiles = $2,
+    updated_at = now()
+WHERE id = $1
+RETURNING *;
+
+-- name: SetActiveProviderProfile :one
+UPDATE "user" SET
+    active_provider_profile_id = $2,
+>>>>>>> 2b47d6a5 (feat(provider-profiles): add provider profile selection to sidebar and settings)
     updated_at = now()
 WHERE id = $1
 RETURNING *;

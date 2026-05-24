@@ -1,5 +1,15 @@
 export type MemberRole = "owner" | "admin" | "member";
 
+export interface ProviderProfile {
+  id: string;
+  name: string;
+  api_key?: string;
+  base_url: string;
+  default_model: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface WorkspaceRepo {
   url: string;
 }
@@ -52,11 +62,13 @@ export interface User {
    * Free-form self-description (role, stack, preferences). Injected into
    * the agent brief so coding agents have cheap, durable context about
    * who is requesting the work. Server always returns a string —
-   * NOT NULL DEFAULT '' at the column level, empty when unset.
+   * NOT NULL DEFAULT  at the column level, empty when unset.
    */
   profile_description: string;
   /** Pinned IANA tz; null means "use browser-detected tz at render time". */
   timezone: string | null;
+  provider_profiles: ProviderProfile[];
+  active_provider_profile_id: string | null;
   created_at: string;
   updated_at: string;
 }

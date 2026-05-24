@@ -570,8 +570,10 @@ type User struct {
 	StarterContentState     pgtype.Text        `json:"starter_content_state"`
 	Language                pgtype.Text        `json:"language"`
 	ProfileDescription      string             `json:"profile_description"`
-	// User-preferred IANA timezone for report rendering (Viewing tz). NULL means "use the browser-detected tz at render time". Affects dashboards, charts, and any "today" label shown to this user. Does not affect data materialisation — all rollups remain in UTC.
-	Timezone pgtype.Text `json:"timezone"`
+	Timezone                pgtype.Text        `json:"timezone"`
+	ProviderProfiles        []byte             `json:"provider_profiles"`
+	ActiveProviderProfileID pgtype.Text        `json:"active_provider_profile_id"`
+>>>>>>> 2b47d6a5 (feat(provider-profiles): add provider profile selection to sidebar and settings)
 }
 
 type VerificationCode struct {

@@ -317,6 +317,11 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 		// server/internal/handler/onboarding_shim.go.
 		r.Post("/api/me/onboarding/runtime-bootstrap", h.BootstrapOnboardingRuntime)
 		r.Post("/api/me/onboarding/no-runtime-bootstrap", h.BootstrapOnboardingNoRuntime)
+		r.Get("/api/me/provider-profiles", h.GetProviderProfiles)
+		r.Put("/api/me/provider-profiles", h.UpdateProviderProfiles)
+		r.Get("/api/me/provider-profiles", h.GetProviderProfiles)
+		r.Put("/api/me/provider-profiles", h.UpdateProviderProfiles)
+>>>>>>> 2b47d6a5 (feat(provider-profiles): add provider profile selection to sidebar and settings)
 		r.Post("/api/cli-token", h.IssueCliToken)
 		r.Post("/api/upload-file", h.UploadFile)
 		r.Post("/api/feedback", h.CreateFeedback)

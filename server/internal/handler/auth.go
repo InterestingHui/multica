@@ -62,6 +62,8 @@ type UserResponse struct {
 	ProfileDescription      string          `json:"profile_description"`
 	CreatedAt               string          `json:"created_at"`
 	UpdatedAt               string          `json:"updated_at"`
+	ProviderProfiles        json.RawMessage `json:"provider_profiles"`
+	ActiveProviderProfileID *string         `json:"active_provider_profile_id"`
 }
 
 // MaxProfileDescriptionLen caps the user-supplied profile_description body.
@@ -78,6 +80,10 @@ func userToResponse(u db.User) UserResponse {
 	if len(q) == 0 {
 		q = []byte("{}")
 	}
+	pp := u.ProviderProfiles
+	if len(pp) == 0 {
+		pp = []byte("[]")
+	}
 	return UserResponse{
 		ID:                      uuidToString(u.ID),
 		Name:                    u.Name,
@@ -91,6 +97,8 @@ func userToResponse(u db.User) UserResponse {
 		ProfileDescription:      u.ProfileDescription,
 		CreatedAt:               timestampToString(u.CreatedAt),
 		UpdatedAt:               timestampToString(u.UpdatedAt),
+		ProviderProfiles:        json.RawMessage(pp),
+		ActiveProviderProfileID: textToPtr(u.ActiveProviderProfileID),
 	}
 }
 
@@ -438,9 +446,23 @@ type UpdateMeRequest struct {
 	Language           *string `json:"language"`
 	ProfileDescription *string `json:"profile_description"`
 	// IANA tz to pin; "" clears back to NULL; nil leaves untouched.
-	Timezone *string `json:"timezone"`
+	Timezone                *string `json:"timezone"`
+	ActiveProviderProfileID *string `json:"active_provider_profile_id"`
 }
 
+type ProviderProfile struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	ApiKey       string `json:"api_key,omitempty"`
+	BaseURL      string `json:"base_url"`
+	DefaultModel string `json:"default_model"`
+	CreatedAt    string `json:"created_at"`
+	UpdatedAt    string `json:"updated_at"`
+}
+
+type UpdateProviderProfilesRequest struct {
+	Profiles []ProviderProfile `json:"profiles"`
+}
 type GoogleLoginRequest struct {
 	Code        string `json:"code"`
 	RedirectURI string `json:"redirect_uri"`
@@ -684,36 +706,98 @@ func (h *Handler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		params.Language = pgtype.Text{String: lang, Valid: true}
 	}
 	if req.ProfileDescription != nil {
-		// Count runes, not bytes: 2000 chars of Chinese must not be rejected
-		// as ~6000 bytes. utf8.RuneCountInString handles invalid UTF-8 by
-		// counting each bad byte as one rune, which still bounds the column.
-		desc := strings.TrimSpace(*req.ProfileDescription)
-		if utf8.RuneCountInString(desc) > MaxProfileDescriptionLen {
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("profile_description exceeds %d characters", MaxProfileDescriptionLen))
-			return
-		}
-		params.ProfileDescription = pgtype.Text{String: desc, Valid: true}
-	}
-
-	if req.Timezone != nil {
-		// Valid=false → column untouched; Valid=true + "" → clear to
-		// NULL; Valid=true + IANA → set. Three-way semantics enforced
-		// in the UpdateUser SQL CASE.
-		tz := strings.TrimSpace(*req.Timezone)
-		if tz != "" {
-			if loc, err := time.LoadLocation(tz); err != nil || loc == nil {
-				writeError(w, http.StatusBadRequest, "invalid timezone")
+			desc := strings.TrimSpace(*req.ProfileDescription)
+			if utf8.RuneCountInString(desc) > MaxProfileDescriptionLen {
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("profile_description exceeds %d characters", MaxProfileDescriptionLen))
 				return
 			}
+			params.ProfileDescription = pgtype.Text{String: desc, Valid: true}
 		}
-		params.Timezone = pgtype.Text{String: tz, Valid: true}
-	}
 
-	updatedUser, err := h.Queries.UpdateUser(r.Context(), params)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to update user")
+		if req.Timezone != nil {
+			tz := strings.TrimSpace(*req.Timezone)
+			if tz != "" {
+				if loc, err := time.LoadLocation(tz); err != nil || loc == nil {
+					writeError(w, http.StatusBadRequest, "invalid timezone")
+					return
+				}
+			}
+			params.Timezone = pgtype.Text{String: tz, Valid: true}
+		}
+		if req.ActiveProviderProfileID != nil {
+			params.ActiveProviderProfileID = pgtype.Text{String: *req.ActiveProviderProfileID, Valid: *req.ActiveProviderProfileID != ""}
+		}
+
+		updatedUser, err := h.Queries.UpdateUser(r.Context(), params)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to update user")
+			return
+		}
+
+		writeJSON(w, http.StatusOK, userToResponse(updatedUser))
+
+func redactApiKey(key string) string {
+	if len(key) <= 8 {
+		return "****"
+	}
+	return key[:3] + "-..." + key[len(key)-4:]
+}
+
+func (h *Handler) GetProviderProfiles(w http.ResponseWriter, r *http.Request) {
+	userID, ok := requireUserID(w, r)
+	if !ok {
 		return
 	}
+	user, err := h.Queries.GetUser(r.Context(), parseUUID(userID))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "user not found")
+		return
+	}
+	var profiles []ProviderProfile
+	if len(user.ProviderProfiles) > 0 {
+		if err := json.Unmarshal(user.ProviderProfiles, &profiles); err != nil {
+			slog.Warn("failed to unmarshal provider_profiles", "user_id", userID, "error", err)
+			profiles = nil
+		}
+	}
+	if profiles == nil {
+		profiles = []ProviderProfile{}
+	}
+	for i := range profiles {
+		profiles[i].ApiKey = redactApiKey(profiles[i].ApiKey)
+	}
+	writeJSON(w, http.StatusOK, profiles)
+}
 
-	writeJSON(w, http.StatusOK, userToResponse(updatedUser))
+func (h *Handler) UpdateProviderProfiles(w http.ResponseWriter, r *http.Request) {
+	userID, ok := requireUserID(w, r)
+	if !ok {
+		return
+	}
+	var req UpdateProviderProfilesRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if len(req.Profiles) > 10 {
+		writeError(w, http.StatusBadRequest, "maximum 10 provider profiles allowed")
+		return
+	}
+	raw, err := json.Marshal(req.Profiles)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to encode profiles")
+		return
+	}
+	_, err = h.Queries.UpdateProviderProfiles(r.Context(), db.UpdateProviderProfilesParams{
+		ID:               parseUUID(userID),
+		ProviderProfiles: raw,
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to save provider profiles")
+		return
+	}
+	for i := range req.Profiles {
+		req.Profiles[i].ApiKey = redactApiKey(req.Profiles[i].ApiKey)
+	}
+	writeJSON(w, http.StatusOK, req.Profiles)
 }

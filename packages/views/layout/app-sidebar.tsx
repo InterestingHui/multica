@@ -333,13 +333,15 @@ interface AppSidebarProps {
   topSlot?: React.ReactNode;
   /** Rendered in the header between workspace switcher and new-issue button (e.g. search trigger) */
   searchSlot?: React.ReactNode;
+  /** Rendered in the header for provider profile selection */
+  profileSlot?: React.ReactNode;
   /** Extra className for SidebarHeader */
   headerClassName?: string;
   /** Extra style for SidebarHeader */
   headerStyle?: React.CSSProperties;
 }
 
-export function AppSidebar({ topSlot, searchSlot, headerClassName, headerStyle }: AppSidebarProps = {}) {
+export function AppSidebar({ topSlot, searchSlot, profileSlot, headerClassName, headerStyle }: AppSidebarProps = {}) {
   const { t } = useT("layout");
   const { pathname, push } = useNavigation();
   const user = useAuthStore((s) => s.user);
@@ -582,6 +584,7 @@ export function AppSidebar({ topSlot, searchSlot, headerClassName, headerStyle }
               </DropdownMenu>
             </SidebarMenuItem>
           </SidebarMenu>
+          {profileSlot}
           <SidebarMenu>
             {searchSlot && (
               <SidebarMenuItem>

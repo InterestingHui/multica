@@ -7,6 +7,7 @@ import { AppSidebar } from "./app-sidebar";
 import { DashboardGuard } from "./dashboard-guard";
 import { NavigationProgress } from "./navigation-progress";
 import { WorkspacePresencePrefetch } from "./workspace-presence-prefetch";
+import { ProviderProfilePicker } from "./provider-profile-picker";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -34,7 +35,7 @@ export function DashboardLayout({
     >
       <SidebarProvider className="h-svh">
         <WorkspacePresencePrefetch />
-        <AppSidebar searchSlot={searchSlot} />
+        <AppSidebar searchSlot={searchSlot} profileSlot={<ProviderProfilePicker />} />
         <SidebarInset className="relative overflow-hidden">
           <NavigationProgress />
           {children}

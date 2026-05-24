@@ -9,6 +9,8 @@ const fakeUser: User = {
   name: "Alice",
   email: "alice@example.com",
   avatar_url: null,
+  provider_profiles: [],
+  active_provider_profile_id: null,
 } as User;
 
 function makeStorage(initial: Record<string, string> = {}): StorageAdapter & {

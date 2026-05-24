@@ -14,7 +14,7 @@ import (
 const createUser = `-- name: CreateUser :one
 INSERT INTO "user" (name, email, avatar_url)
 VALUES ($1, $2, $3)
-RETURNING id, name, email, avatar_url, created_at, updated_at, onboarded_at, onboarding_questionnaire, cloud_waitlist_email, cloud_waitlist_reason, starter_content_state, language, profile_description, timezone
+RETURNING id, name, email, avatar_url, created_at, updated_at, onboarded_at, onboarding_questionnaire, cloud_waitlist_email, cloud_waitlist_reason, starter_content_state, language, provider_profiles, active_provider_profile_id
 `
 
 type CreateUserParams struct {
@@ -39,14 +39,14 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.CloudWaitlistReason,
 		&i.StarterContentState,
 		&i.Language,
-		&i.ProfileDescription,
-		&i.Timezone,
+		&i.ProviderProfiles,
+		&i.ActiveProviderProfileID,
 	)
 	return i, err
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, name, email, avatar_url, created_at, updated_at, onboarded_at, onboarding_questionnaire, cloud_waitlist_email, cloud_waitlist_reason, starter_content_state, language, profile_description, timezone FROM "user"
+SELECT id, name, email, avatar_url, created_at, updated_at, onboarded_at, onboarding_questionnaire, cloud_waitlist_email, cloud_waitlist_reason, starter_content_state, language, provider_profiles, active_provider_profile_id FROM "user"
 WHERE id = $1
 `
 
@@ -66,14 +66,14 @@ func (q *Queries) GetUser(ctx context.Context, id pgtype.UUID) (User, error) {
 		&i.CloudWaitlistReason,
 		&i.StarterContentState,
 		&i.Language,
-		&i.ProfileDescription,
-		&i.Timezone,
+		&i.ProviderProfiles,
+		&i.ActiveProviderProfileID,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, name, email, avatar_url, created_at, updated_at, onboarded_at, onboarding_questionnaire, cloud_waitlist_email, cloud_waitlist_reason, starter_content_state, language, profile_description, timezone FROM "user"
+SELECT id, name, email, avatar_url, created_at, updated_at, onboarded_at, onboarding_questionnaire, cloud_waitlist_email, cloud_waitlist_reason, starter_content_state, language, provider_profiles, active_provider_profile_id FROM "user"
 WHERE email = $1
 `
 
@@ -93,8 +93,8 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.CloudWaitlistReason,
 		&i.StarterContentState,
 		&i.Language,
-		&i.ProfileDescription,
-		&i.Timezone,
+		&i.ProviderProfiles,
+		&i.ActiveProviderProfileID,
 	)
 	return i, err
 }
@@ -105,7 +105,7 @@ UPDATE "user" SET
     cloud_waitlist_reason = $3,
     updated_at = now()
 WHERE id = $1
-RETURNING id, name, email, avatar_url, created_at, updated_at, onboarded_at, onboarding_questionnaire, cloud_waitlist_email, cloud_waitlist_reason, starter_content_state, language, profile_description, timezone
+RETURNING id, name, email, avatar_url, created_at, updated_at, onboarded_at, onboarding_questionnaire, cloud_waitlist_email, cloud_waitlist_reason, starter_content_state, language, provider_profiles, active_provider_profile_id
 `
 
 type JoinCloudWaitlistParams struct {
@@ -133,8 +133,8 @@ func (q *Queries) JoinCloudWaitlist(ctx context.Context, arg JoinCloudWaitlistPa
 		&i.CloudWaitlistReason,
 		&i.StarterContentState,
 		&i.Language,
-		&i.ProfileDescription,
-		&i.Timezone,
+		&i.ProviderProfiles,
+		&i.ActiveProviderProfileID,
 	)
 	return i, err
 }
@@ -144,7 +144,7 @@ UPDATE "user" SET
     onboarded_at = COALESCE(onboarded_at, now()),
     updated_at = now()
 WHERE id = $1
-RETURNING id, name, email, avatar_url, created_at, updated_at, onboarded_at, onboarding_questionnaire, cloud_waitlist_email, cloud_waitlist_reason, starter_content_state, language, profile_description, timezone
+RETURNING id, name, email, avatar_url, created_at, updated_at, onboarded_at, onboarding_questionnaire, cloud_waitlist_email, cloud_waitlist_reason, starter_content_state, language, provider_profiles, active_provider_profile_id
 `
 
 func (q *Queries) MarkUserOnboarded(ctx context.Context, id pgtype.UUID) (User, error) {
@@ -163,8 +163,8 @@ func (q *Queries) MarkUserOnboarded(ctx context.Context, id pgtype.UUID) (User, 
 		&i.CloudWaitlistReason,
 		&i.StarterContentState,
 		&i.Language,
-		&i.ProfileDescription,
-		&i.Timezone,
+		&i.ProviderProfiles,
+		&i.ActiveProviderProfileID,
 	)
 	return i, err
 }
@@ -174,7 +174,7 @@ UPDATE "user" SET
     onboarding_questionnaire = COALESCE($1, onboarding_questionnaire),
     updated_at = now()
 WHERE id = $2
-RETURNING id, name, email, avatar_url, created_at, updated_at, onboarded_at, onboarding_questionnaire, cloud_waitlist_email, cloud_waitlist_reason, starter_content_state, language, profile_description, timezone
+RETURNING id, name, email, avatar_url, created_at, updated_at, onboarded_at, onboarding_questionnaire, cloud_waitlist_email, cloud_waitlist_reason, starter_content_state, language, provider_profiles, active_provider_profile_id
 `
 
 type PatchUserOnboardingParams struct {
@@ -182,10 +182,6 @@ type PatchUserOnboardingParams struct {
 	ID            pgtype.UUID `json:"id"`
 }
 
-// Partial update of the user's onboarding decision fields. Currently only the
-// questionnaire JSONB is patchable — the v2 attempt at persisting Step 3
-// runtime choice on the user row was reverted; that state now lives in a
-// frontend Zustand transient store.
 func (q *Queries) PatchUserOnboarding(ctx context.Context, arg PatchUserOnboardingParams) (User, error) {
 	row := q.db.QueryRow(ctx, patchUserOnboarding, arg.Questionnaire, arg.ID)
 	var i User
@@ -202,8 +198,8 @@ func (q *Queries) PatchUserOnboarding(ctx context.Context, arg PatchUserOnboardi
 		&i.CloudWaitlistReason,
 		&i.StarterContentState,
 		&i.Language,
-		&i.ProfileDescription,
-		&i.Timezone,
+		&i.ProviderProfiles,
+		&i.ActiveProviderProfileID,
 	)
 	return i, err
 }
@@ -213,7 +209,7 @@ UPDATE "user" SET
     starter_content_state = $2,
     updated_at = now()
 WHERE id = $1
-RETURNING id, name, email, avatar_url, created_at, updated_at, onboarded_at, onboarding_questionnaire, cloud_waitlist_email, cloud_waitlist_reason, starter_content_state, language, profile_description, timezone
+RETURNING id, name, email, avatar_url, created_at, updated_at, onboarded_at, onboarding_questionnaire, cloud_waitlist_email, cloud_waitlist_reason, starter_content_state, language, provider_profiles, active_provider_profile_id
 `
 
 type SetStarterContentStateParams struct {
@@ -242,8 +238,8 @@ func (q *Queries) SetStarterContentState(ctx context.Context, arg SetStarterCont
 		&i.CloudWaitlistReason,
 		&i.StarterContentState,
 		&i.Language,
-		&i.ProfileDescription,
-		&i.Timezone,
+		&i.ProviderProfiles,
+		&i.ActiveProviderProfileID,
 	)
 	return i, err
 }
@@ -253,46 +249,27 @@ UPDATE "user" SET
     name = COALESCE($2, name),
     avatar_url = COALESCE($3, avatar_url),
     language = COALESCE($4, language),
-    profile_description = COALESCE($5, profile_description),
-    timezone = CASE
-        WHEN $6::text IS NULL THEN timezone
-        WHEN $6::text = ''    THEN NULL
-        ELSE $6::text
-    END,
+    active_provider_profile_id = COALESCE($5, active_provider_profile_id),
     updated_at = now()
 WHERE id = $1
-RETURNING id, name, email, avatar_url, created_at, updated_at, onboarded_at, onboarding_questionnaire, cloud_waitlist_email, cloud_waitlist_reason, starter_content_state, language, profile_description, timezone
+RETURNING id, name, email, avatar_url, created_at, updated_at, onboarded_at, onboarding_questionnaire, cloud_waitlist_email, cloud_waitlist_reason, starter_content_state, language, provider_profiles, active_provider_profile_id
 `
 
 type UpdateUserParams struct {
-	ID                 pgtype.UUID `json:"id"`
-	Name               string      `json:"name"`
-	AvatarUrl          pgtype.Text `json:"avatar_url"`
-	Language           pgtype.Text `json:"language"`
-	ProfileDescription pgtype.Text `json:"profile_description"`
-	Timezone           pgtype.Text `json:"timezone"`
+	ID                      pgtype.UUID `json:"id"`
+	Name                    string      `json:"name"`
+	AvatarUrl               pgtype.Text `json:"avatar_url"`
+	Language                pgtype.Text `json:"language"`
+	ActiveProviderProfileID pgtype.Text `json:"active_provider_profile_id"`
 }
 
-// Patches the user-controlled profile fields. Each parameter follows
-// COALESCE-on-NULL semantics so the handler can omit any field it
-// doesn't intend to write.
-//
-// `timezone` (Viewing-tz preference) participates in
-// the same shape but uses sqlc.narg + a sentinel-string convention:
-// the handler passes the empty string "" to mean "clear back to NULL"
-// (browser-detected fallback), an IANA name like "Asia/Shanghai" to
-// pin a value, and `sqlc.narg('timezone') IS NULL` (no value at all)
-// to leave the existing column untouched. Folding it into UpdateUser
-// rather than carrying a dedicated UpdateUserTimezone keeps the
-// profile-patch shape uniform between Preferences fields.
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {
 	row := q.db.QueryRow(ctx, updateUser,
 		arg.ID,
 		arg.Name,
 		arg.AvatarUrl,
 		arg.Language,
-		arg.ProfileDescription,
-		arg.Timezone,
+		arg.ActiveProviderProfileID,
 	)
 	var i User
 	err := row.Scan(
@@ -308,8 +285,78 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.CloudWaitlistReason,
 		&i.StarterContentState,
 		&i.Language,
-		&i.ProfileDescription,
-		&i.Timezone,
+		&i.ProviderProfiles,
+		&i.ActiveProviderProfileID,
+	)
+	return i, err
+}
+
+const updateProviderProfiles = `-- name: UpdateProviderProfiles :one
+UPDATE "user" SET
+    provider_profiles = $2,
+    updated_at = now()
+WHERE id = $1
+RETURNING id, name, email, avatar_url, created_at, updated_at, onboarded_at, onboarding_questionnaire, cloud_waitlist_email, cloud_waitlist_reason, starter_content_state, language, provider_profiles, active_provider_profile_id
+`
+
+type UpdateProviderProfilesParams struct {
+	ID               pgtype.UUID `json:"id"`
+	ProviderProfiles []byte      `json:"provider_profiles"`
+}
+
+func (q *Queries) UpdateProviderProfiles(ctx context.Context, arg UpdateProviderProfilesParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateProviderProfiles, arg.ID, arg.ProviderProfiles)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Email,
+		&i.AvatarUrl,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.OnboardedAt,
+		&i.OnboardingQuestionnaire,
+		&i.CloudWaitlistEmail,
+		&i.CloudWaitlistReason,
+		&i.StarterContentState,
+		&i.Language,
+		&i.ProviderProfiles,
+		&i.ActiveProviderProfileID,
+	)
+	return i, err
+}
+
+const setActiveProviderProfile = `-- name: SetActiveProviderProfile :one
+UPDATE "user" SET
+    active_provider_profile_id = $2,
+    updated_at = now()
+WHERE id = $1
+RETURNING id, name, email, avatar_url, created_at, updated_at, onboarded_at, onboarding_questionnaire, cloud_waitlist_email, cloud_waitlist_reason, starter_content_state, language, provider_profiles, active_provider_profile_id
+`
+
+type SetActiveProviderProfileParams struct {
+	ID                      pgtype.UUID `json:"id"`
+	ActiveProviderProfileID pgtype.Text `json:"active_provider_profile_id"`
+}
+
+func (q *Queries) SetActiveProviderProfile(ctx context.Context, arg SetActiveProviderProfileParams) (User, error) {
+	row := q.db.QueryRow(ctx, setActiveProviderProfile, arg.ID, arg.ActiveProviderProfileID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Email,
+		&i.AvatarUrl,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.OnboardedAt,
+		&i.OnboardingQuestionnaire,
+		&i.CloudWaitlistEmail,
+		&i.CloudWaitlistReason,
+		&i.StarterContentState,
+		&i.Language,
+		&i.ProviderProfiles,
+		&i.ActiveProviderProfileID,
 	)
 	return i, err
 }
