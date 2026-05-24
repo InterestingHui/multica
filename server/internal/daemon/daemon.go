@@ -2770,6 +2770,41 @@ func (d *Daemon) executeAndDrain(ctx context.Context, backend agent.Backend, pro
 		var pendingThinking strings.Builder
 		var batch []TaskMessageData
 		callIDToTool := map[string]string{}
+		pendingToolCalls := map[string]time.Time{}
+		progressTimers := map[string]*time.Timer{}
+		progressTickers := map[string]*time.Ticker{}
+		stopProgressCh := map[string]chan struct{}{}
+
+		emitProgress := func(callID, tool string, started time.Time) {
+			elapsed := time.Since(started)
+			s := seq.Add(1)
+			mu.Lock()
+			batch = append(batch, TaskMessageData{
+				Seq:     int(s),
+				Type:    "tool_progress",
+				Tool:    tool,
+				Content: fmt.Sprintf("Running... (%ds)", int(elapsed.Seconds())),
+			})
+			mu.Unlock()
+		}
+
+		cleanupProgress := func(callID string) {
+			mu.Lock()
+			delete(pendingToolCalls, callID)
+			if t, ok := progressTimers[callID]; ok {
+				t.Stop()
+				delete(progressTimers, callID)
+			}
+			if tk, ok := progressTickers[callID]; ok {
+				tk.Stop()
+				delete(progressTickers, callID)
+			}
+			if ch, ok := stopProgressCh[callID]; ok {
+				close(ch)
+				delete(stopProgressCh, callID)
+			}
+			mu.Unlock()
+		}
 
 		flush := func() {
 			mu.Lock()
@@ -2869,6 +2904,46 @@ func (d *Daemon) executeAndDrain(ctx context.Context, backend agent.Backend, pro
 						Input: msg.Input,
 					})
 					mu.Unlock()
+					// Start progress heartbeat for long-running tools
+					if msg.CallID != "" {
+						callID := msg.CallID
+						toolName := msg.Tool
+						started := time.Now()
+						mu.Lock()
+						pendingToolCalls[callID] = started
+						stopCh := make(chan struct{})
+						stopProgressCh[callID] = stopCh
+						mu.Unlock()
+						progressTimers[callID] = time.AfterFunc(15*time.Second, func() {
+							mu.Lock()
+							_, exists := pendingToolCalls[callID]
+							if !exists {
+								mu.Unlock()
+								return
+							}
+							mu.Unlock()
+							emitProgress(callID, toolName, started)
+							ticker := time.NewTicker(15 * time.Second)
+							mu.Lock()
+							progressTickers[callID] = ticker
+							mu.Unlock()
+							for {
+								select {
+								case <-ticker.C:
+									mu.Lock()
+									s, exists := pendingToolCalls[callID]
+									if !exists {
+										mu.Unlock()
+										return
+									}
+									mu.Unlock()
+									emitProgress(callID, toolName, s)
+								case <-stopCh:
+									return
+								}
+							}
+						})
+					}
 				case agent.MessageToolResult:
 					// Decrement only when the count would stay >= 0. A stray
 					// tool_result with no matching tool_use (backend bug or
@@ -2896,6 +2971,10 @@ func (d *Daemon) executeAndDrain(ctx context.Context, backend agent.Backend, pro
 						mu.Unlock()
 					}
 					taskLog.Info("tool_result observed", "seq", s, "tool", toolName, "call_id", msg.CallID)
+					// Clean up progress tracking when tool completes
+					if msg.CallID != "" {
+						cleanupProgress(msg.CallID)
+					}
 					mu.Lock()
 					batch = append(batch, TaskMessageData{
 						Seq:    int(s),
@@ -2934,6 +3013,18 @@ func (d *Daemon) executeAndDrain(ctx context.Context, backend agent.Backend, pro
 		}
 	drainDone:
 		close(done)
+		// Clean up any remaining progress timers
+		mu.Lock()
+		for _, t := range progressTimers {
+			t.Stop()
+		}
+		for _, tk := range progressTickers {
+			tk.Stop()
+		}
+		for _, ch := range stopProgressCh {
+			close(ch)
+		}
+		mu.Unlock()
 		flush()
 	}()
 

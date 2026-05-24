@@ -4,7 +4,7 @@ import { redactSecrets } from "./redact";
 /** A unified timeline entry: tool calls, thinking, text, and errors in chronological order. */
 export interface TimelineItem {
   seq: number;
-  type: "tool_use" | "tool_result" | "thinking" | "text" | "error";
+  type: "tool_use" | "tool_result" | "tool_progress" | "thinking" | "text" | "error";
   tool?: string;
   content?: string;
   input?: Record<string, unknown>;
@@ -25,4 +25,9 @@ export function buildTimeline(msgs: TaskMessagePayload[]): TimelineItem[] {
     });
   }
   return items.sort((a, b) => a.seq - b.seq);
+}
+
+/** For historical (non-live) views, compress tool_progress messages out of the timeline. */
+export function compressTimeline(items: TimelineItem[]): TimelineItem[] {
+  return items.filter((item) => item.type !== "tool_progress");
 }

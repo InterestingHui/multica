@@ -36,6 +36,7 @@ import { api } from "@multica/core/api";
 import { useTranscriptViewStore, type TranscriptSortDirection } from "@multica/core/agents/stores";
 import type { AgentTask, Agent, AgentRuntime } from "@multica/core/types/agent";
 import { redactSecrets } from "./redact";
+import { compressTimeline } from "./build-timeline";
 import type { TimelineItem } from "./build-timeline";
 import { useT } from "../../i18n";
 
@@ -57,7 +58,7 @@ interface AgentTranscriptDialogProps {
 
 // ─── Color mapping for timeline segments ────────────────────────────────────
 
-type EventColor = "agent" | "thinking" | "tool" | "result" | "error";
+type EventColor = "agent" | "thinking" | "tool" | "progress" | "result" | "error";
 
 function getEventColor(item: TimelineItem): EventColor {
   switch (item.type) {
@@ -67,6 +68,8 @@ function getEventColor(item: TimelineItem): EventColor {
       return "thinking";
     case "tool_use":
       return "tool";
+    case "tool_progress":
+      return "progress";
     case "tool_result":
       return "result";
     case "error":
@@ -80,6 +83,7 @@ const colorClasses: Record<EventColor, { bg: string; bgActive: string; label: st
   agent: { bg: "bg-emerald-400/60", bgActive: "bg-emerald-500", label: "bg-emerald-500" },
   thinking: { bg: "bg-violet-400/60", bgActive: "bg-violet-500", label: "bg-violet-500/20 text-violet-700 dark:text-violet-300" },
   tool: { bg: "bg-blue-400/60", bgActive: "bg-blue-500", label: "bg-blue-500/20 text-blue-700 dark:text-blue-300" },
+  progress: { bg: "bg-blue-300/30", bgActive: "bg-blue-400", label: "bg-blue-500/10 text-blue-500" },
   result: { bg: "bg-slate-300/60 dark:bg-slate-600/60", bgActive: "bg-slate-400 dark:bg-slate-500", label: "bg-muted text-muted-foreground" },
   error: { bg: "bg-red-400/60", bgActive: "bg-red-500", label: "bg-red-500/20 text-red-700 dark:text-red-300" },
 };
@@ -96,6 +100,8 @@ function getEventLabel(item: TimelineItem): string {
       return item.tool ?? "Tool";
     case "tool_result":
       return item.tool ? `${item.tool}` : "Result";
+    case "tool_progress":
+      return "Running";
     case "error":
       return "Error";
     default:
@@ -133,6 +139,8 @@ function getEventSummary(item: TimelineItem): string {
     }
     case "tool_result":
       return item.output?.slice(0, 200) ?? "";
+    case "tool_progress":
+      return item.content ?? "Executing...";
     case "error":
       return item.content ?? "";
     default:
@@ -217,13 +225,11 @@ export function AgentTranscriptDialog({
     return items.filter((item) => selectedTools.has(itemFilterKey(item)));
   }, [items, selectedTools]);
 
-  // Apply user-chosen sort direction. Reverse is a pure presentation concern —
-  // the underlying timeline (and its seq numbers) is untouched, so copy/filter
-  // and segment navigation continue to work against the same data.
-  const displayItems = useMemo(
-    () => (sortDirection === "newest_first" ? [...filteredItems].reverse() : filteredItems),
-    [filteredItems, sortDirection],
-  );
+  // Compress tool_progress in non-live mode, then apply sort direction.
+  const displayItems = useMemo(() => {
+    const items = isLive ? filteredItems : compressTimeline(filteredItems);
+    return sortDirection === "newest_first" ? [...items].reverse() : items;
+  }, [filteredItems, isLive, sortDirection]);
 
   // Toggling direction is a manual user action; jump the scroll container back
   // to the top so the newest end of the timeline (per the chosen direction) is
@@ -467,8 +473,8 @@ export function AgentTranscriptDialog({
             )}
             <MetadataChip>
               {selectedTools.size > 0
-                ? t(($) => $.transcript.events_filtered, { shown: filteredItems.length, total: items.length })
-                : t(($) => $.transcript.events, { count: items.length })}
+                ? t(($) => $.transcript.events_filtered, { shown: displayItems.length, total: items.length })
+                : t(($) => $.transcript.events, { count: displayItems.length })}
             </MetadataChip>
 
             {/* Created time */}
@@ -530,6 +536,8 @@ export function AgentTranscriptDialog({
                   }}
                   item={item}
                   isSelected={selectedSeq === item.seq}
+                  isLive={isLive}
+                  nextItem={displayItems[idx + 1]}
                 />
               ))}
             </div>
@@ -677,24 +685,46 @@ function TimelineBar({
 interface TranscriptEventRowProps {
   item: TimelineItem;
   isSelected: boolean;
+  isLive?: boolean;
+  nextItem?: TimelineItem;
 }
 
 const TranscriptEventRow = ({
   ref,
   item,
   isSelected,
+  isLive,
+  nextItem,
 }: TranscriptEventRowProps & { ref?: React.Ref<HTMLDivElement> }) => {
   const [expanded, setExpanded] = useState(false);
   const color = getEventColor(item);
   const label = getEventLabel(item);
   const summary = getEventSummary(item);
 
+  // Compact rendering for tool_progress items
+  if (item.type === "tool_progress") {
+    return (
+      <div
+        ref={ref}
+        className={cn("group transition-colors", isSelected && "bg-accent/50")}
+      >
+        <div className="flex items-center gap-2 px-4 py-1">
+          <span className="inline-flex items-center shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium min-w-[60px] justify-center bg-blue-500/10 text-blue-500">
+            <Loader2 className="h-2.5 w-2.5 animate-spin mr-1" />
+            Running
+          </span>
+          <span className="text-[11px] text-muted-foreground tabular-nums">{item.content}</span>
+        </div>
+      </div>
+    );
+  }
+
   const hasDetail =
     (item.type === "tool_use" && item.input && Object.keys(item.input).length > 0) ||
     (item.type === "tool_result" && item.output && item.output.length > 0) ||
     (item.type === "thinking" && item.content && item.content.length > 0) ||
-    (item.type === "text" && item.content && item.content.length > 0) ||
-    (item.type === "error" && item.content && item.content.length > 0);
+    (item.type === "text" && item.content && item.content.split("\n").length > 1) ||
+    (item.type === "error" && item.content && item.content.length > 0); // tool_progress has no detail
 
   return (
     <div
@@ -744,6 +774,14 @@ const TranscriptEventRow = ({
           <span className="shrink-0 text-[10px] text-muted-foreground/50 tabular-nums mt-1">
             #{item.seq}
           </span>
+
+          {/* Live running indicator */}
+          {isLive && item.type === "tool_use" &&
+            (!nextItem || (nextItem.type !== "tool_result" && nextItem.type !== "tool_progress")) && (
+            <span className="shrink-0 inline-flex items-center gap-1 text-[10px] text-info tabular-nums mt-1">
+              <Loader2 className="h-3 w-3 animate-spin" />
+            </span>
+          )}
         </div>
 
         {/* Expanded detail */}
@@ -799,6 +837,8 @@ function EventDetailContent({ item }: { item: TimelineItem }) {
           {item.content ?? ""}
         </pre>
       );
+    case "tool_progress":
+      return null;
     default:
       return null;
   }
