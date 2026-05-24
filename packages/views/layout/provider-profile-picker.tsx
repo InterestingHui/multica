@@ -47,13 +47,14 @@ export function ProviderProfilePicker() {
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger
-            render={(props) => (
-              <SidebarMenuButton className="text-muted-foreground" {...props}>
+            className="w-full"
+            render={
+              <SidebarMenuButton className="text-muted-foreground">
                 <Cpu className="h-4 w-4" />
                 <span className="truncate">{label}</span>
                 <ChevronDown className="ml-auto h-3.5 w-3.5 opacity-50" />
               </SidebarMenuButton>
-            )}
+            }
           />
           <DropdownMenuContent align="start" className="w-56">
             <DropdownMenuLabel>Provider Profiles</DropdownMenuLabel>
