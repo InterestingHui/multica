@@ -527,7 +527,7 @@ export function AgentTranscriptDialog({
             </div>
           ) : (
             <div className="divide-y">
-              {displayItems.map((item) => (
+              {displayItems.map((item, idx) => (
                 <TranscriptEventRow
                   key={item.seq}
                   ref={(el) => {
