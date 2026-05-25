@@ -1880,14 +1880,6 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
               </div>
             </div>
 
-            {/* Agent live output — sticky banner in the activity section,
-                keyed by issue id so switching issues remounts the card and
-                clears any in-flight task state from the previous issue.
-                The execution log itself (per-task timeline + past runs)
-                lives in the right panel via ExecutionLogSection — this
-                card is just a header-style "agent is working" anchor. */}
-            <AgentLiveCard key={id} issueId={id} />
-
             {/* Timeline entries — virtualized via react-virtuoso to keep
                 first-paint cost O(viewport) instead of O(N). On a 500-comment
                 issue the unvirtualized .map froze the page for several
@@ -1950,6 +1942,11 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
                 </div>
               )
             )}
+
+            {/* Agent live card — sticky banner at the bottom of the activity
+                section. Keyed by issue id so switching issues remounts the card
+                and clears any in-flight task state. */}
+            <AgentLiveCard key={id} issueId={id} />
 
             {/* Bottom comment input — no avatar, full width */}
             <div className="mt-4">

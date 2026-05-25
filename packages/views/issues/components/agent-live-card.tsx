@@ -17,7 +17,7 @@ import {
 import { useT } from "../../i18n";
 import { TerminateTaskConfirmDialog } from "./terminate-task-confirm-dialog";
 
-// AgentLiveCard renders a sticky banner at the top of the issue's main
+// AgentLiveCard renders a sticky banner at the bottom of the issue's main
 // column for every active task. Each banner shows "agent X is working",
 // elapsed time, tool count, and Cancel/Transcript actions.
 //
@@ -235,8 +235,8 @@ export function AgentLiveCard({ issueId }: AgentLiveCardProps) {
 
   return (
     <>
-      {/* Primary agent — sticky at the top of the activity area */}
-      <div className="mt-4 sticky top-4 z-10 rounded-lg bg-background/80 supports-[backdrop-filter]:bg-background/55 backdrop-blur-md">
+      {/* Primary agent — sticky at the bottom of the activity area */}
+      <div className="mb-4 sticky bottom-4 z-10 rounded-lg bg-background/80 supports-[backdrop-filter]:bg-background/55 backdrop-blur-md">
         <SingleAgentLiveCard
           task={firstEntry.task}
           items={firstEntry.items}
