@@ -22,5 +22,8 @@ export function matchLocale(candidates: string[]): SupportedLocale {
 export function pickLocale(adapter: LocaleAdapter): SupportedLocale {
   const choice = adapter.getUserChoice();
   if (choice) return matchLocale([choice]);
-  return matchLocale(adapter.getSystemPreferences());
+  // No explicit user preference — use DEFAULT_LOCALE instead of browser
+  // Accept-Language. The user can explicitly choose a locale in Settings,
+  // which is persisted to both the adapter and user.language in the DB.
+  return DEFAULT_LOCALE;
 }
